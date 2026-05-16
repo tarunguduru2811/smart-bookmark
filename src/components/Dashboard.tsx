@@ -15,23 +15,35 @@ export default function Dashboard({ initialBookmarks, user }: { initialBookmarks
   const supabase = createClient()
 
   useEffect(() => {
-    const channel = supabase
-      .channel('realtime:bookmarks')
-      .on('postgres_changes', {
-        event: '*',
-        schema: 'public',
-        table: 'bookmarks',
-        filter: `user_id=eq.${user.id}`
-      }, (payload) => {
-        if (payload.eventType === 'INSERT') {
-          setBookmarks((prev) => [payload.new as Bookmark, ...prev])
-        } else if (payload.eventType === 'DELETE') {
-          setBookmarks((prev) => prev.filter(b => b.id !== payload.old.id))
-        } else if (payload.eventType === 'UPDATE') {
-          setBookmarks((prev) => prev.map(b => b.id === payload.new.id ? payload.new as Bookmark : b))
-        }
-      })
-      .subscribe()
+    const channel = supabase.channel('realtime:bookmarks')
+
+    channel.on('postgres_changes', {
+      event: 'INSERT',
+      schema: 'public',
+      table: 'bookmarks',
+      filter: `user_id=eq.${user.id}`
+    }, (payload) => {
+      setBookmarks((prev) => [payload.new as Bookmark, ...prev])
+    })
+
+    channel.on('postgres_changes', {
+      event: 'UPDATE',
+      schema: 'public',
+      table: 'bookmarks',
+      filter: `user_id=eq.${user.id}`
+    }, (payload) => {
+      setBookmarks((prev) => prev.map(b => b.id === payload.new.id ? payload.new as Bookmark : b))
+    })
+
+    channel.on('postgres_changes', {
+      event: 'DELETE',
+      schema: 'public',
+      table: 'bookmarks'
+    }, (payload) => {
+      setBookmarks((prev) => prev.filter(b => b.id !== payload.old.id))
+    })
+
+    channel.subscribe()
 
     return () => {
       supabase.removeChannel(channel)
